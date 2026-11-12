@@ -23,7 +23,7 @@ label.check{display:flex;align-items:flex-start;gap:9px;margin:10px 0;color:#344
 </style>
 </head>
 <body>
-<header><main style="padding:0 18px"><h1>Large VRM Reducer</h1><p>Phân tích model và bổ sung Secondary Animation cho VRM 0.x.</p></main></header>
+<header><main style="padding:0 18px"><div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><h1>Large VRM Reducer</h1><button id="langBtn" class="secondary" type="button">English</button></div><p id="tagline">Phân tích model và bổ sung Secondary Animation cho VRM 0.x.</p></main></header>
 <main>
 <section class="card">
 <h2>1. Chọn model</h2>
@@ -159,6 +159,35 @@ $("download").addEventListener("click",()=>{
  const a=document.createElement("a"),url=URL.createObjectURL(outputBlob);a.href=url;
  const base=sourceFile.name.replace(/\.(vrm|glb)$/i,"");a.download=base+"_AutoSecondary.vrm";document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);
 });
+
+const translations = {
+ vi: {
+  tagline:"Phân tích model và bổ sung Secondary Animation cho VRM 0.x.", choose:"1. Chọn model", chooseFile:"Chọn file VRM / GLB", local:"File được xử lý ngay trên thiết bị, không tải lên máy chủ.", secondary:"2. Auto Secondary", secondaryDesc:"Nhận diện bone theo tên và cấu trúc skin. Công cụ chỉ thêm metadata cho các bone hiện có.", preserve:"Giữ nguyên các Secondary groups/collider groups hiện có khi bổ sung.", replace:"Thay toàn bộ Secondary groups hiện có bằng kết quả Auto Secondary (chỉ bật nếu em muốn làm lại).", build:"Tạo Secondary & chuẩn bị Export", download:"Export VRM 0.x", limits:"Giới hạn tương thích", footer:"Large VRM Reducer · Xử lý trên trình duyệt · Không giả mạo metadata UniVRM", l1:"• Bản này chỉ ghi cấu trúc VRM 0.x / VRM.secondaryAnimation vào file VRM đã có extension VRM hợp lệ.", l2:"• GLB thuần chưa phải VRM: công cụ không tự giả lập Humanoid, Meta, Material hay chuyển đổi GLB thành VRM.", l3:"• Auto Secondary tạo bone groups, không tự sinh collider vật lý. Chuyển động thực tế còn phụ thuộc cấu hình Spring/Collider và ứng dụng đọc VRM.", l4:"• Bản này chưa nén texture/mesh. Không tuyên bố giảm dung lượng khi chưa thực hiện tối ưu dữ liệu."
+ },
+ en: {
+  tagline:"Analyze models and add Secondary Animation metadata to VRM 0.x files.", choose:"1. Select a model", chooseFile:"Choose VRM / GLB file", local:"Files are processed on your device and are not uploaded to a server.", secondary:"2. Auto Secondary", secondaryDesc:"Detects bones by name and skin structure. Only adds metadata for bones that already exist.", preserve:"Preserve existing Secondary bone groups and collider groups when adding groups.", replace:"Replace all existing Secondary groups with Auto Secondary results (enable only if you want to rebuild them).", build:"Build Secondary & Prepare Export", download:"Export VRM 0.x", limits:"Compatibility notes", footer:"Large VRM Reducer · Browser-side processing · No fabricated UniVRM metadata", l1:"• This version writes VRM 0.x / VRM.secondaryAnimation data only into files that already contain a valid VRM extension.", l2:"• A plain GLB is not a VRM. This tool does not fabricate Humanoid, Meta, or Material data, and does not convert GLB to VRM.", l3:"• Auto Secondary creates bone groups; it does not generate physical colliders. Actual motion depends on Spring/Collider setup and the VRM app.", l4:"• Texture and mesh compression are not implemented yet. No file-size reduction is claimed until data is actually optimized."
+ }
+};
+let language="vi";
+function setLanguage(next){
+ language=next;const t=translations[next];document.documentElement.lang=next;
+ $("langBtn").textContent=next==="vi"?"English":"Tiếng Việt";
+ $("tagline").textContent=t.tagline;
+ document.querySelector("section.card:nth-of-type(1) h2").textContent=t.choose;
+ document.querySelector(".drop strong").textContent=t.chooseFile;
+ document.querySelector(".drop span").textContent=t.local;
+ document.querySelector("section.card:nth-of-type(2) h2").textContent=t.secondary;
+ document.querySelector("section.card:nth-of-type(2) > p").textContent=t.secondaryDesc;
+ $("preserve").parentElement.lastChild.textContent=" "+t.preserve;
+ $("replace").parentElement.lastChild.textContent=" "+t.replace;
+ $("build").textContent=t.build;$("download").textContent=t.download;
+ document.querySelector("section.card:nth-of-type(3) h2").textContent=t.limits;
+ const notes=document.querySelectorAll("section.card:nth-of-type(3) .note");
+ [t.l1,t.l2,t.l3,t.l4].forEach((v,i)=>{if(notes[i])notes[i].textContent=v;});
+ document.querySelector("footer").textContent=t.footer;
+}
+$("langBtn").addEventListener("click",()=>setLanguage(language==="vi"?"en":"vi"));
+
 })();
 </script>
 </body></html>
