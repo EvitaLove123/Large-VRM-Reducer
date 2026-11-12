@@ -28,7 +28,7 @@ label.check{display:flex;align-items:flex-start;gap:9px;margin:10px 0;color:#344
 <section class="card">
 <h2>1. Select a VRM file</h2>
 <label class="drop"><input id="file" type="file" accept=".vrm,model/gltf-binary"><strong>Choose a .vrm file</strong><span>Processing stays on this device. Files are never uploaded.</span></label>
-<div id="fileInfo" class="status">Chưa chọn file.</div>
+<div id="fileInfo" class="status">No file selected.</div>
 <div id="stats" class="statgrid hidden" style="margin-top:12px">
 <div class="stat"><b id="size">—</b><small>File size</small></div><div class="stat"><b id="nodes">—</b><small>Nodes</small></div><div class="stat"><b id="joints">—</b><small>Skin joints</small></div>
 </div>
@@ -52,19 +52,19 @@ let sourceFile=null, parsed=null, outputBlob=null;
 const fmt = n => n<1024*1024 ? (n/1024).toFixed(1)+" KB" : (n/1024/1024).toFixed(2)+" MB";
 function parseGlb(buffer){
  const v=new DataView(buffer);
- if(v.byteLength<20 || v.getUint32(0,true)!==0x46546c67) throw Error("File không phải GLB hợp lệ.");
+ if(v.byteLength<20 || v.getUint32(0,true)!==0x46546c67) throw Error("Invalid VRM container.");
  const version=v.getUint32(4,true), total=v.getUint32(8,true);
- if(version!==2 || total>buffer.byteLength || total<20) throw Error("Chỉ hỗ trợ GLB 2.0 hợp lệ.");
+ if(version!==2 || total>buffer.byteLength || total<20) throw Error("Only valid GLB 2.0-based VRM files are supported.");
  let offset=12,json=null,chunks=[];
  while(offset+8<=total){
   const len=v.getUint32(offset,true), type=v.getUint32(offset+4,true), start=offset+8;
-  if(start+len>total) throw Error("Chunk GLB bị lỗi.");
+  if(start+len>total) throw Error("The VRM data chunk is corrupted.");
   const data=buffer.slice(start,start+len);
-  if(type===0x4e4f534a){if(json) throw Error("GLB có nhiều JSON chunks.");json=JSON.parse(new TextDecoder().decode(data).replace(/\u0000+$/g,"").trim());}
+  if(type===0x4e4f534a){if(json) throw Error("The VRM container has multiple JSON chunks.");json=JSON.parse(new TextDecoder().decode(data).replace(/\u0000+$/g,"").trim());}
   else chunks.push({type,data});
   offset=start+len;
  }
- if(!json) throw Error("Không tìm thấy JSON chunk.");
+ if(!json) throw Error("The VRM JSON chunk is missing.");
  return {json,chunks};
 }
 function makeGlb(json,chunks){
@@ -89,7 +89,7 @@ $("file").addEventListener("change",async e=>{
  if(!sourceFile)return;
  $("fileInfo").className="status";$("fileInfo").textContent="Reading VRM file…";
  try{
-  if(!/\\.vrm$/i.test(sourceFile.name))throw Error("VRM files only. Please select a .vrm file.");
+  if(!/\.vrm$/i.test(sourceFile.name))throw Error("VRM files only. Please select a .vrm file.");
   const buffer=await sourceFile.arrayBuffer();parsed=parseGlb(buffer);
   const ext=parsed.json.extensions&&parsed.json.extensions.VRM;
   if(!ext)throw Error("This file does not contain a VRM 0.x extension. VRM 1.0 support is not included in this build.");
