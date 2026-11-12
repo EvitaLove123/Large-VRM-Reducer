@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Large VRM Reducer</title>
+<style>
+:root{color-scheme:light;--bg:#f5f8fc;--card:#fff;--ink:#1d2939;--muted:#667085;--line:#e4eaf2;--blue:#3978d6;--blue2:#eaf2ff;--green:#16845b;--red:#c03939}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+header{padding:24px 18px 18px;background:linear-gradient(135deg,#edf5ff,#fff);border-bottom:1px solid var(--line)}
+main{max-width:850px;margin:auto;padding:18px;display:grid;gap:14px}
+h1{font-size:23px;margin:0 0 4px}h2{font-size:17px;margin:0 0 10px}p{margin:6px 0;color:var(--muted)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 3px 14px #1d293908}
+.drop{display:block;border:2px dashed #b8cbe5;border-radius:14px;padding:24px 14px;text-align:center;background:#f9fbff;cursor:pointer}
+.drop input{display:none}.drop strong{display:block;color:var(--blue);font-size:16px}.drop span{display:block;color:var(--muted);font-size:13px;margin-top:4px}
+button{border:0;border-radius:11px;background:var(--blue);color:#fff;padding:12px 16px;font-weight:650;font-size:14px;cursor:pointer}
+button:disabled{opacity:.45;cursor:not-allowed}.secondary{background:#edf2f8;color:#344054}.actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:12px}
+.statgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.stat{background:#f7f9fc;border:1px solid var(--line);border-radius:11px;padding:10px}.stat b{display:block;font-size:18px}.stat small{color:var(--muted)}
+.status{padding:11px 12px;border-radius:10px;background:#f2f5f9;color:#475467;margin-top:10px}.status.ok{background:#eaf8f1;color:#126b4b}.status.warn{background:#fff6e8;color:#8b5a11}.status.bad{background:#fff0f0;color:#a12e2e}
+.item{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}.item:last-child{border:0}.tag{font-size:12px;padding:3px 8px;background:var(--blue2);color:#285da8;border-radius:20px;white-space:nowrap}
+label.check{display:flex;align-items:flex-start;gap:9px;margin:10px 0;color:#344054}input[type=checkbox]{margin-top:4px;accent-color:var(--blue)}
+.note{font-size:13px}.hidden{display:none!important}footer{text-align:center;color:var(--muted);font-size:12px;padding:4px 18px 24px}
+@media(max-width:520px){.statgrid{grid-template-columns:1fr 1fr}.stat:last-child{grid-column:span 2}main{padding:12px}}
+</style>
+</head>
+<body>
+<header><main style="padding:0 18px"><h1>Large VRM Reducer</h1><p>Phân tích model và bổ sung Secondary Animation cho VRM 0.x.</p></main></header>
+<main>
+<section class="card">
+<h2>1. Chọn model</h2>
+<label class="drop"><input id="file" type="file" accept=".vrm,.glb,model/gltf-binary"><strong>Chọn file VRM / GLB</strong><span>File được xử lý ngay trên thiết bị, không tải lên máy chủ.</span></label>
+<div id="fileInfo" class="status">Chưa chọn file.</div>
+<div id="stats" class="statgrid hidden" style="margin-top:12px">
+<div class="stat"><b id="size">—</b><small>Dung lượng</small></div><div class="stat"><b id="nodes">—</b><small>Nodes</small></div><div class="stat"><b id="joints">—</b><small>Joint trong skin</small></div>
+</div>
+</section>
+<section class="card">
+<h2>2. Auto Secondary</h2>
+<p>Nhận diện bone theo tên và cấu trúc skin. Công cụ chỉ thêm metadata cho các bone hiện có.</p>
+<div id="secondaryInfo" class="status">Hãy chọn một file để phân tích.</div>
+<div id="candidateList"></div>
+<label class="check"><input id="preserve" type="checkbox" checked> Giữ nguyên các Secondary groups/collider groups hiện có khi bổ sung.</label>
+<label class="check"><input id="replace" type="checkbox"> Thay toàn bộ Secondary groups hiện có bằng kết quả Auto Secondary (chỉ bật nếu em muốn làm lại).</label>
+<div class="actions"><button id="build" disabled>Tạo Secondary & chuẩn bị Export</button><button id="download" class="secondary" disabled>Export VRM 0.x</button></div>
+<div id="exportInfo" class="status hidden"></div>
+</section>
+<section class="card">
+<h2>Giới hạn tương thích</h2>
+<p class="note">• Bản này chỉ ghi cấu trúc <b>VRM 0.x / VRM.secondaryAnimation</b> vào file VRM đã có extension VRM hợp lệ.</p>
+<p class="note">• GLB thuần chưa phải VRM: công cụ không tự giả lập Humanoid, Meta, Material hay chuyển đổi GLB thành VRM.</p>
+<p class="note">• Auto Secondary tạo bone groups, không tự sinh collider vật lý. Chuyển động thực tế còn phụ thuộc cấu hình Spring/Collider và ứng dụng đọc VRM.</p>
+<p class="note">• Bản này chưa nén texture/mesh. Không tuyên bố giảm dung lượng khi chưa thực hiện tối ưu dữ liệu.</p>
+</section>
+</main>
+<footer>Large VRM Reducer · Browser-side processing · No UniVRM metadata fabrication</footer>
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+let sourceFile=null, parsed=null, outputBlob=null, candidates=[];
+const keywords = [
+  {label:"Hair", terms:["hair","髪","kami","ponytail","ahoge","bang","braid"]},
+  {label:"Skirt / Cloth", terms:["skirt","cloth","dress","coat","cape","ribbon","フリル","スカート"]},
+  {label:"Tail", terms:["tail","しっぽ","尾"]},
+  {label:"Ears / Wings", terms:["ear","wing","feather","antenna","horn"]},
+  {label:"Accessories", terms:["accessory","chain","strap","pendant","飾り"]}
+];
+const fmt = n => n<1024*1024 ? (n/1024).toFixed(1)+" KB" : (n/1024/1024).toFixed(2)+" MB";
+function parseGlb(buffer){
+ const v=new DataView(buffer);
+ if(v.byteLength<20 || v.getUint32(0,true)!==0x46546c67) throw Error("File không phải GLB hợp lệ.");
+ const version=v.getUint32(4,true), total=v.getUint32(8,true);
+ if(version!==2 || total>buffer.byteLength || total<20) throw Error("Chỉ hỗ trợ GLB 2.0 hợp lệ.");
+ let offset=12,json=null,chunks=[];
+ while(offset+8<=total){
+  const len=v.getUint32(offset,true), type=v.getUint32(offset+4,true), start=offset+8;
+  if(start+len>total) throw Error("Chunk GLB bị lỗi.");
+  const data=buffer.slice(start,start+len);
+  if(type===0x4e4f534a){if(json) throw Error("GLB có nhiều JSON chunks.");json=JSON.parse(new TextDecoder().decode(data).replace(/\u0000+$/g,"").trim());}
+  else chunks.push({type,data});
+  offset=start+len;
+ }
+ if(!json) throw Error("Không tìm thấy JSON chunk.");
+ return {json,chunks};
+}
+function makeGlb(json,chunks){
+ const enc=new TextEncoder(); let jb=enc.encode(JSON.stringify(json));
+ const pad=(arr,byte)=>{const n=(4-arr.length%4)%4;if(!n)return arr;const out=new Uint8Array(arr.length+n);out.set(arr);out.fill(byte,arr.length);return out;};
+ jb=pad(jb,0x20);
+ const all=[{type:0x4e4f534a,data:jb},...chunks.map(c=>({type:c.type,data:new Uint8Array(c.data)}))];
+ const total=12+all.reduce((s,c)=>s+8+c.data.length,0), out=new ArrayBuffer(total), dv=new DataView(out);
+ dv.setUint32(0,0x46546c67,true);dv.setUint32(4,2,true);dv.setUint32(8,total,true);
+ let o=12;for(const c of all){dv.setUint32(o,c.data.length,true);dv.setUint32(o+4,c.type,true);new Uint8Array(out,o+8,c.data.length).set(c.data);o+=8+c.data.length;}
+ return new Blob([out],{type:"model/gltf-binary"});
+}
+function classify(name){const s=(name||"").toLowerCase();return keywords.find(k=>k.terms.some(t=>s.includes(t)));}
+function analyze(json){
+ const nodes=json.nodes||[], jointSet=new Set();
+ (json.skins||[]).forEach(s=>(s.joints||[]).forEach(j=>jointSet.add(j)));
+ const result=[];
+ nodes.forEach((n,i)=>{if(!jointSet.has(i))return;const category=classify(n.name||"");if(category)result.push({index:i,name:n.name||("Node_"+i),category:category.label});});
+ return {nodes:nodes.length,joints:jointSet.size,candidates:result};
+}
+function renderCandidates(){
+ $("candidateList").innerHTML="";
+ if(!candidates.length){$("candidateList").innerHTML='<p class="note">Không tìm thấy tên bone phụ phổ biến trong các joint của skin. Không tự tạo bone giả.</p>';return;}
+ const counts={};candidates.forEach(c=>counts[c.category]=(counts[c.category]||0)+1);
+ Object.entries(counts).forEach(([name,count])=>{const d=document.createElement("div");d.className="item";const a=document.createElement("span");a.textContent=name;const b=document.createElement("span");b.className="tag";b.textContent=count+" bone";d.append(a,b);$("candidateList").append(d);});
+}
+$("file").addEventListener("change",async e=>{
+ sourceFile=e.target.files&&e.target.files[0];parsed=null;outputBlob=null;candidates=[];
+ $("build").disabled=true;$("download").disabled=true;$("stats").classList.add("hidden");$("exportInfo").classList.add("hidden");$("candidateList").innerHTML="";
+ if(!sourceFile)return;
+ $("fileInfo").className="status";$("fileInfo").textContent="Đang đọc file…";
+ try{
+  const buffer=await sourceFile.arrayBuffer();parsed=parseGlb(buffer);
+  const ext=parsed.json.extensions&&parsed.json.extensions.VRM;
+  const vrm1=parsed.json.extensions&&parsed.json.extensions.VRMC_vrm;
+  const a=analyze(parsed.json);candidates=a.candidates;
+  $("size").textContent=fmt(sourceFile.size);$("nodes").textContent=a.nodes;$("joints").textContent=a.joints;$("stats").classList.remove("hidden");
+  if(ext){
+   const existing=ext.secondaryAnimation;
+   $("fileInfo").className="status ok";$("fileInfo").textContent=sourceFile.name+" · Có VRM 0.x extension.";
+   $("secondaryInfo").className= existing && (existing.boneGroups||[]).length ? "status ok":"status";
+   $("secondaryInfo").textContent=existing ? "Đã có Secondary: "+((existing.boneGroups||[]).length)+" bone groups, "+((existing.colliderGroups||[]).length)+" collider groups." : "Chưa có secondaryAnimation. Có thể tạo cấu trúc từ các bone nhận diện được.";
+   $("build").disabled=!candidates.length;
+  }else if(vrm1){
+   $("fileInfo").className="status warn";$("fileInfo").textContent="File là VRM 1.0.";
+   $("secondaryInfo").className="status warn";$("secondaryInfo").textContent="VRM 1.0 dùng VRMC_springBone, không phải secondaryAnimation của VRM 0.x. Bản này chưa ghi SpringBone VRM 1.0.";
+  }else{
+   $("fileInfo").className="status warn";$("fileInfo").textContent="Đây là GLB thuần, chưa có VRM extension.";
+   $("secondaryInfo").className="status warn";$("secondaryInfo").textContent="Cần chuyển GLB thành VRM hợp lệ trước. Không thể chỉ thêm Secondary để biến GLB thành VRM.";
+  }
+  renderCandidates();
+ }catch(err){$("fileInfo").className="status bad";$("fileInfo").textContent="Không đọc được file: "+err.message;parsed=null;}
+});
+$("build").addEventListener("click",()=>{
+ if(!parsed)return;
+ try{
+  const json=JSON.parse(JSON.stringify(parsed.json)), vrm=json.extensions&&json.extensions.VRM;
+  if(!vrm)throw Error("Không có VRM 0.x extension.");
+  const old=vrm.secondaryAnimation||{boneGroups:[],colliderGroups:[]};
+  const groups= [];
+  const buckets={};candidates.forEach(c=>(buckets[c.category]??=[]).push(c.name));
+  Object.entries(buckets).forEach(([category,bones])=>groups.push({
+   comment:"Auto Secondary - "+category,
+   stiffiness:1.0,gravityPower:0.0,gravityDir:{x:0,y:-1,z:0},dragForce:0.4,hitRadius:0.02,bones
+  }));
+  const preserve=$("preserve").checked&&!$("replace").checked;
+  vrm.secondaryAnimation={
+   boneGroups:preserve?[...(old.boneGroups||[]),...groups]:groups,
+   colliderGroups:preserve?(old.colliderGroups||[]):[]
+  };
+  outputBlob=makeGlb(json,parsed.chunks);
+  $("download").disabled=false;$("exportInfo").className="status ok";$("exportInfo").classList.remove("hidden");
+  $("exportInfo").textContent="Đã tạo "+groups.length+" bone groups từ "+candidates.length+" bone. File gốc chưa bị thay đổi; nhấn Export VRM 0.x để tải bản mới.";
+ }catch(err){$("exportInfo").className="status bad";$("exportInfo").classList.remove("hidden");$("exportInfo").textContent=err.message;}
+});
+$("download").addEventListener("click",()=>{
+ if(!outputBlob||!sourceFile)return;
+ const a=document.createElement("a"),url=URL.createObjectURL(outputBlob);a.href=url;
+ const base=sourceFile.name.replace(/\.(vrm|glb)$/i,"");a.download=base+"_AutoSecondary.vrm";document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);
+});
+})();
+</script>
+</body></html>
