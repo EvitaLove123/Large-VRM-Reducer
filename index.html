@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="vi">
+<html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Large VRM Reducer</title>
@@ -23,46 +23,32 @@ label.check{display:flex;align-items:flex-start;gap:9px;margin:10px 0;color:#344
 </style>
 </head>
 <body>
-<header><main style="padding:0 18px"><div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><h1>Large VRM Reducer</h1><button id="langBtn" class="secondary" type="button">English</button></div><p id="tagline">Phân tích model và bổ sung Secondary Animation cho VRM 0.x.</p></main></header>
+<header><main style="padding:0 18px"><h1>Large VRM Reducer</h1><p id="tagline">Optimize VRM files and manage the dedicated Secondary Node.</p></main></header>
 <main>
 <section class="card">
-<h2>1. Chọn model</h2>
-<label class="drop"><input id="file" type="file" accept=".vrm,.glb,model/gltf-binary"><strong>Chọn file VRM / GLB</strong><span>File được xử lý ngay trên thiết bị, không tải lên máy chủ.</span></label>
+<h2>1. Select a VRM file</h2>
+<label class="drop"><input id="file" type="file" accept=".vrm,model/gltf-binary"><strong>Choose a .vrm file</strong><span>Processing stays on this device. Files are never uploaded.</span></label>
 <div id="fileInfo" class="status">Chưa chọn file.</div>
 <div id="stats" class="statgrid hidden" style="margin-top:12px">
-<div class="stat"><b id="size">—</b><small>Dung lượng</small></div><div class="stat"><b id="nodes">—</b><small>Nodes</small></div><div class="stat"><b id="joints">—</b><small>Joint trong skin</small></div>
+<div class="stat"><b id="size">—</b><small>File size</small></div><div class="stat"><b id="nodes">—</b><small>Nodes</small></div><div class="stat"><b id="joints">—</b><small>Skin joints</small></div>
 </div>
 </section>
-<section class="card">
-<h2>2. Auto Secondary</h2>
-<p>Nhận diện bone theo tên và cấu trúc skin. Công cụ chỉ thêm metadata cho các bone hiện có.</p>
-<div id="secondaryInfo" class="status">Hãy chọn một file để phân tích.</div>
-<div id="candidateList"></div>
-<label class="check"><input id="preserve" type="checkbox" checked> Giữ nguyên các Secondary groups/collider groups hiện có khi bổ sung.</label>
-<label class="check"><input id="replace" type="checkbox"> Thay toàn bộ Secondary groups hiện có bằng kết quả Auto Secondary (chỉ bật nếu em muốn làm lại).</label>
-<div class="actions"><button id="build" disabled>Tạo Secondary & chuẩn bị Export</button><button id="download" class="secondary" disabled>Export VRM 0.x</button></div>
-<div id="exportInfo" class="status hidden"></div>
-</section>
-<section class="card">
-<h2>Giới hạn tương thích</h2>
-<p class="note">• Bản này chỉ ghi cấu trúc <b>VRM 0.x / VRM.secondaryAnimation</b> vào file VRM đã có extension VRM hợp lệ.</p>
-<p class="note">• GLB thuần chưa phải VRM: công cụ không tự giả lập Humanoid, Meta, Material hay chuyển đổi GLB thành VRM.</p>
-<p class="note">• Auto Secondary tạo bone groups, không tự sinh collider vật lý. Chuyển động thực tế còn phụ thuộc cấu hình Spring/Collider và ứng dụng đọc VRM.</p>
-<p class="note">• Bản này chưa nén texture/mesh. Không tuyên bố giảm dung lượng khi chưa thực hiện tối ưu dữ liệu.</p>
-</section>
+<section class="card"><h2>2. Secondary Node</h2>
+<p>This tool manages the dedicated glTF node named <b>secondary</b> inside a VRM file. It is separate from VRM 0.x Secondary Animation and Spring Bone.</p>
+<div id="secondaryInfo" class="status">Choose a VRM file to inspect its Secondary Node.</div>
+<div class="actions"><button id="build" disabled>Add / Repair Secondary Node</button><button id="download" class="secondary" disabled>Export VRM</button></div>
+<div id="exportInfo" class="status hidden"></div></section>
+<section class="card"><h2>Compatibility & scope</h2>
+<p class="note">• VRM files only. GLB-to-VRM conversion is not supported.</p>
+<p class="note">• Secondary Node means a node named <b>secondary</b> in the VRM's glTF <b>nodes[]</b> hierarchy. It is not <b>secondaryAnimation</b> or Spring Bone.</p>
+<p class="note">• If missing, the tool adds it to <b>nodes[]</b> and the active scene's root nodes, following the supplied reference VRM.</p>
+<p class="note">• Texture compression, polygon reduction, mesh optimization, and BlendShape removal are not implemented in this build.</p></section>
 </main>
-<footer>Large VRM Reducer · Browser-side processing · No UniVRM metadata fabrication</footer>
+<footer>Large VRM Reducer · VRM-only · Browser-side processing · No UniVRM metadata fabrication</footer>
 <script>
 (() => {
 const $ = id => document.getElementById(id);
-let sourceFile=null, parsed=null, outputBlob=null, candidates=[];
-const keywords = [
-  {label:"Hair", terms:["hair","髪","kami","ponytail","ahoge","bang","braid"]},
-  {label:"Skirt / Cloth", terms:["skirt","cloth","dress","coat","cape","ribbon","フリル","スカート"]},
-  {label:"Tail", terms:["tail","しっぽ","尾"]},
-  {label:"Ears / Wings", terms:["ear","wing","feather","antenna","horn"]},
-  {label:"Accessories", terms:["accessory","chain","strap","pendant","飾り"]}
-];
+let sourceFile=null, parsed=null, outputBlob=null;
 const fmt = n => n<1024*1024 ? (n/1024).toFixed(1)+" KB" : (n/1024/1024).toFixed(2)+" MB";
 function parseGlb(buffer){
  const v=new DataView(buffer);
@@ -91,67 +77,47 @@ function makeGlb(json,chunks){
  let o=12;for(const c of all){dv.setUint32(o,c.data.length,true);dv.setUint32(o+4,c.type,true);new Uint8Array(out,o+8,c.data.length).set(c.data);o+=8+c.data.length;}
  return new Blob([out],{type:"model/gltf-binary"});
 }
-function classify(name){const s=(name||"").toLowerCase();return keywords.find(k=>k.terms.some(t=>s.includes(t)));}
 function analyze(json){
  const nodes=json.nodes||[], jointSet=new Set();
  (json.skins||[]).forEach(s=>(s.joints||[]).forEach(j=>jointSet.add(j)));
- const result=[];
- nodes.forEach((n,i)=>{if(!jointSet.has(i))return;const category=classify(n.name||"");if(category)result.push({index:i,name:n.name||("Node_"+i),category:category.label});});
- return {nodes:nodes.length,joints:jointSet.size,candidates:result};
-}
-function renderCandidates(){
- $("candidateList").innerHTML="";
- if(!candidates.length){$("candidateList").innerHTML='<p class="note">Không tìm thấy tên bone phụ phổ biến trong các joint của skin. Không tự tạo bone giả.</p>';return;}
- const counts={};candidates.forEach(c=>counts[c.category]=(counts[c.category]||0)+1);
- Object.entries(counts).forEach(([name,count])=>{const d=document.createElement("div");d.className="item";const a=document.createElement("span");a.textContent=name;const b=document.createElement("span");b.className="tag";b.textContent=count+" bone";d.append(a,b);$("candidateList").append(d);});
+ const matches=[];nodes.forEach((n,i)=>{if((n.name||"").trim().toLowerCase()==="secondary")matches.push(i);});
+ return {nodes:nodes.length,joints:jointSet.size,secondaryNodes:matches};
 }
 $("file").addEventListener("change",async e=>{
- sourceFile=e.target.files&&e.target.files[0];parsed=null;outputBlob=null;candidates=[];
- $("build").disabled=true;$("download").disabled=true;$("stats").classList.add("hidden");$("exportInfo").classList.add("hidden");$("candidateList").innerHTML="";
+ sourceFile=e.target.files&&e.target.files[0];parsed=null;outputBlob=null;
+ $("build").disabled=true;$("download").disabled=true;$("stats").classList.add("hidden");$("exportInfo").classList.add("hidden");
  if(!sourceFile)return;
- $("fileInfo").className="status";$("fileInfo").textContent="Đang đọc file…";
+ $("fileInfo").className="status";$("fileInfo").textContent="Reading VRM file…";
  try{
+  if(!/\\.vrm$/i.test(sourceFile.name))throw Error("VRM files only. Please select a .vrm file.");
   const buffer=await sourceFile.arrayBuffer();parsed=parseGlb(buffer);
   const ext=parsed.json.extensions&&parsed.json.extensions.VRM;
-  const vrm1=parsed.json.extensions&&parsed.json.extensions.VRMC_vrm;
-  const a=analyze(parsed.json);candidates=a.candidates;
+  if(!ext)throw Error("This file does not contain a VRM 0.x extension. VRM 1.0 support is not included in this build.");
+  const a=analyze(parsed.json);
   $("size").textContent=fmt(sourceFile.size);$("nodes").textContent=a.nodes;$("joints").textContent=a.joints;$("stats").classList.remove("hidden");
-  if(ext){
-   const existing=ext.secondaryAnimation;
-   $("fileInfo").className="status ok";$("fileInfo").textContent=sourceFile.name+" · Có VRM 0.x extension.";
-   $("secondaryInfo").className= existing && (existing.boneGroups||[]).length ? "status ok":"status";
-   $("secondaryInfo").textContent=existing ? "Đã có Secondary: "+((existing.boneGroups||[]).length)+" bone groups, "+((existing.colliderGroups||[]).length)+" collider groups." : "Chưa có secondaryAnimation. Có thể tạo cấu trúc từ các bone nhận diện được.";
-   $("build").disabled=!candidates.length;
-  }else if(vrm1){
-   $("fileInfo").className="status warn";$("fileInfo").textContent="File là VRM 1.0.";
-   $("secondaryInfo").className="status warn";$("secondaryInfo").textContent="VRM 1.0 dùng VRMC_springBone, không phải secondaryAnimation của VRM 0.x. Bản này chưa ghi SpringBone VRM 1.0.";
-  }else{
-   $("fileInfo").className="status warn";$("fileInfo").textContent="Đây là GLB thuần, chưa có VRM extension.";
-   $("secondaryInfo").className="status warn";$("secondaryInfo").textContent="Cần chuyển GLB thành VRM hợp lệ trước. Không thể chỉ thêm Secondary để biến GLB thành VRM.";
-  }
-  renderCandidates();
- }catch(err){$("fileInfo").className="status bad";$("fileInfo").textContent="Không đọc được file: "+err.message;parsed=null;}
+  $("fileInfo").className="status ok";$("fileInfo").textContent=sourceFile.name+" · Valid GLB container with VRM 0.x extension.";
+  $("secondaryInfo").className=a.secondaryNodes.length?"status ok":"status warn";
+  $("secondaryInfo").textContent=a.secondaryNodes.length?"Found "+a.secondaryNodes.length+" node(s) named secondary at index: "+a.secondaryNodes.join(", ")+".":"No node named secondary was found. You can add one using the reference structure.";
+  $("build").disabled=false;
+ }catch(err){$("fileInfo").className="status bad";$("fileInfo").textContent="Cannot process file: "+err.message;parsed=null;$("secondaryInfo").className="status bad";$("secondaryInfo").textContent="Unable to inspect Secondary Node.";}
 });
 $("build").addEventListener("click",()=>{
  if(!parsed)return;
  try{
-  const json=JSON.parse(JSON.stringify(parsed.json)), vrm=json.extensions&&json.extensions.VRM;
-  if(!vrm)throw Error("Không có VRM 0.x extension.");
-  const old=vrm.secondaryAnimation||{boneGroups:[],colliderGroups:[]};
-  const groups= [];
-  const buckets={};candidates.forEach(c=>(buckets[c.category]??=[]).push(c.name));
-  Object.entries(buckets).forEach(([category,bones])=>groups.push({
-   comment:"Auto Secondary - "+category,
-   stiffiness:1.0,gravityPower:0.0,gravityDir:{x:0,y:-1,z:0},dragForce:0.4,hitRadius:0.02,bones
-  }));
-  const preserve=$("preserve").checked&&!$("replace").checked;
-  vrm.secondaryAnimation={
-   boneGroups:preserve?[...(old.boneGroups||[]),...groups]:groups,
-   colliderGroups:preserve?(old.colliderGroups||[]):[]
-  };
+  const json=JSON.parse(JSON.stringify(parsed.json));
+  if(!(json.extensions&&json.extensions.VRM))throw Error("VRM 0.x extension is missing.");
+  if(!Array.isArray(json.nodes))json.nodes=[];
+  let nodeIndex=json.nodes.findIndex(n=>(n.name||"").trim().toLowerCase()==="secondary"),created=false;
+  if(nodeIndex<0){nodeIndex=json.nodes.length;json.nodes.push({name:"secondary",translation:[0,0,0],rotation:[0,0,0,1],scale:[1,1,1]});created=true;}
+  if(!Array.isArray(json.scenes)||!json.scenes.length)throw Error("The VRM has no glTF scene. Cannot safely attach the Secondary Node.");
+  const activeScene=Number.isInteger(json.scene)?json.scene:0;
+  if(!json.scenes[activeScene])throw Error("The active glTF scene index is invalid.");
+  if(!Array.isArray(json.scenes[activeScene].nodes))json.scenes[activeScene].nodes=[];
+  if(!json.scenes[activeScene].nodes.includes(nodeIndex))json.scenes[activeScene].nodes.push(nodeIndex);
   outputBlob=makeGlb(json,parsed.chunks);
   $("download").disabled=false;$("exportInfo").className="status ok";$("exportInfo").classList.remove("hidden");
-  $("exportInfo").textContent="Đã tạo "+groups.length+" bone groups từ "+candidates.length+" bone. File gốc chưa bị thay đổi; nhấn Export VRM 0.x để tải bản mới.";
+  $("exportInfo").textContent=(created?"Created":"Kept existing")+" the Secondary Node at index "+nodeIndex+" and ensured it is attached to the active scene. Original model data and VRM extension data are preserved.";
+  $("secondaryInfo").className="status ok";$("secondaryInfo").textContent="Secondary Node ready at nodes["+nodeIndex+"].";
  }catch(err){$("exportInfo").className="status bad";$("exportInfo").classList.remove("hidden");$("exportInfo").textContent=err.message;}
 });
 $("download").addEventListener("click",()=>{
@@ -160,33 +126,6 @@ $("download").addEventListener("click",()=>{
  const base=sourceFile.name.replace(/\.(vrm|glb)$/i,"");a.download=base+"_AutoSecondary.vrm";document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);
 });
 
-const translations = {
- vi: {
-  tagline:"Phân tích model và bổ sung Secondary Animation cho VRM 0.x.", choose:"1. Chọn model", chooseFile:"Chọn file VRM / GLB", local:"File được xử lý ngay trên thiết bị, không tải lên máy chủ.", secondary:"2. Auto Secondary", secondaryDesc:"Nhận diện bone theo tên và cấu trúc skin. Công cụ chỉ thêm metadata cho các bone hiện có.", preserve:"Giữ nguyên các Secondary groups/collider groups hiện có khi bổ sung.", replace:"Thay toàn bộ Secondary groups hiện có bằng kết quả Auto Secondary (chỉ bật nếu em muốn làm lại).", build:"Tạo Secondary & chuẩn bị Export", download:"Export VRM 0.x", limits:"Giới hạn tương thích", footer:"Large VRM Reducer · Xử lý trên trình duyệt · Không giả mạo metadata UniVRM", l1:"• Bản này chỉ ghi cấu trúc VRM 0.x / VRM.secondaryAnimation vào file VRM đã có extension VRM hợp lệ.", l2:"• GLB thuần chưa phải VRM: công cụ không tự giả lập Humanoid, Meta, Material hay chuyển đổi GLB thành VRM.", l3:"• Auto Secondary tạo bone groups, không tự sinh collider vật lý. Chuyển động thực tế còn phụ thuộc cấu hình Spring/Collider và ứng dụng đọc VRM.", l4:"• Bản này chưa nén texture/mesh. Không tuyên bố giảm dung lượng khi chưa thực hiện tối ưu dữ liệu."
- },
- en: {
-  tagline:"Analyze models and add Secondary Animation metadata to VRM 0.x files.", choose:"1. Select a model", chooseFile:"Choose VRM / GLB file", local:"Files are processed on your device and are not uploaded to a server.", secondary:"2. Auto Secondary", secondaryDesc:"Detects bones by name and skin structure. Only adds metadata for bones that already exist.", preserve:"Preserve existing Secondary bone groups and collider groups when adding groups.", replace:"Replace all existing Secondary groups with Auto Secondary results (enable only if you want to rebuild them).", build:"Build Secondary & Prepare Export", download:"Export VRM 0.x", limits:"Compatibility notes", footer:"Large VRM Reducer · Browser-side processing · No fabricated UniVRM metadata", l1:"• This version writes VRM 0.x / VRM.secondaryAnimation data only into files that already contain a valid VRM extension.", l2:"• A plain GLB is not a VRM. This tool does not fabricate Humanoid, Meta, or Material data, and does not convert GLB to VRM.", l3:"• Auto Secondary creates bone groups; it does not generate physical colliders. Actual motion depends on Spring/Collider setup and the VRM app.", l4:"• Texture and mesh compression are not implemented yet. No file-size reduction is claimed until data is actually optimized."
- }
-};
-let language="vi";
-function setLanguage(next){
- language=next;const t=translations[next];document.documentElement.lang=next;
- $("langBtn").textContent=next==="vi"?"English":"Tiếng Việt";
- $("tagline").textContent=t.tagline;
- document.querySelector("section.card:nth-of-type(1) h2").textContent=t.choose;
- document.querySelector(".drop strong").textContent=t.chooseFile;
- document.querySelector(".drop span").textContent=t.local;
- document.querySelector("section.card:nth-of-type(2) h2").textContent=t.secondary;
- document.querySelector("section.card:nth-of-type(2) > p").textContent=t.secondaryDesc;
- $("preserve").parentElement.lastChild.textContent=" "+t.preserve;
- $("replace").parentElement.lastChild.textContent=" "+t.replace;
- $("build").textContent=t.build;$("download").textContent=t.download;
- document.querySelector("section.card:nth-of-type(3) h2").textContent=t.limits;
- const notes=document.querySelectorAll("section.card:nth-of-type(3) .note");
- [t.l1,t.l2,t.l3,t.l4].forEach((v,i)=>{if(notes[i])notes[i].textContent=v;});
- document.querySelector("footer").textContent=t.footer;
-}
-$("langBtn").addEventListener("click",()=>setLanguage(language==="vi"?"en":"vi"));
 
 })();
 </script>
