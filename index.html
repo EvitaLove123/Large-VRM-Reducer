@@ -215,14 +215,14 @@ async function optimizeModel(base){
     if(indices.length<12||indices.length%3!==0){meshStats.skipped++;continue;}
     meshStats.seen++;meshStats.before+=indices.length/3;
     const target=Math.max(3,Math.floor(indices.length*ratio/3)*3);
-    const [reduced,actualError]=simplifier.simplify(indices,positions,3,target,error);
+    const [reduced,actualError]=simplifier.simplify(indices,positions,3,target,error,["Regularize"]);
     if(reduced.length>=indices.length||reduced.length<3){meshStats.after+=indices.length/3;continue;}
-    const maxIndex=reduced.reduce((m,v)=>Math.max(m,v),0),componentType=maxIndex<=65535?5123:5125;
+    let maxIndex=0,minIndex=0xffffffff;for(const value of reduced){if(value>maxIndex)maxIndex=value;if(value<minIndex)minIndex=value;}const componentType=maxIndex<=65535?5123:5125;
     const packedIndices=componentType===5123?Uint16Array.from(reduced):reduced;
     const bytes=new Uint8Array(packedIndices.buffer.slice(packedIndices.byteOffset,packedIndices.byteOffset+packedIndices.byteLength));
     extraIndexParts.push(bytes);
     const viewIndex=views.length;views.push({buffer:0,byteOffset:0,byteLength:bytes.length,target:34963});
-    const newAccessor={...(idx.source||{}),bufferView:viewIndex,byteOffset:0,componentType,count:reduced.length,type:"SCALAR",min:[Math.min(...reduced)],max:[maxIndex]};
+    const newAccessor={...(idx.source||{}),bufferView:viewIndex,byteOffset:0,componentType,count:reduced.length,type:"SCALAR",min:[minIndex],max:[maxIndex]};
     delete newAccessor.sparse;delete newAccessor.normalized;
     const accessorIndex=json.accessors.length;json.accessors.push(newAccessor);primitive.indices=accessorIndex;
     meshStats.changed++;meshStats.after+=reduced.length/3;
