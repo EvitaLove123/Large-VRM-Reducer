@@ -47,6 +47,17 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:4px 18px 24px
 <option value="maximum">Maximum — up to 512 px, JPEG quality 68%</option>
 <option value="extreme">Extreme — up to 256 px, JPEG quality 60%</option>
 </select>
+<div style="border-top:1px solid var(--line);margin-top:14px;padding-top:12px">
+<b>Mesh Optimizer (optional)</b>
+<p class="note">Reduce triangle counts while keeping the original vertex attributes. Skin weights, skeleton bindings and BlendShape vertex data remain attached to the original vertices.</p>
+<label class="check"><input id="meshOptimize" type="checkbox"><span>Enable mesh polygon reduction</span></label>
+<label for="meshRatio"><b>Target triangle ratio</b></label>
+<select id="meshRatio"><option value="0.8">Light — keep about 80%</option><option value="0.6" selected>Balanced — keep about 60%</option><option value="0.4">Strong — keep about 40%</option></select>
+<label for="meshError"><b>Maximum geometric error</b></label>
+<select id="meshError"><option value="0.005">Very conservative — 0.5%</option><option value="0.01" selected>Conservative — 1%</option><option value="0.02">Moderate — 2%</option></select>
+<div class="note">Mesh reduction applies only to indexed triangle primitives with readable POSITION data. Unsupported primitives are skipped. Results can still change silhouette or deformation; always test the exported VRM.</div>
+<div id="meshInfo" class="status">Mesh optimization is off. Enable it to reduce polygon counts.</div>
+</div>
 <label class="check"><input id="resize" type="checkbox" checked><span>Resize oversized textures to the selected maximum dimension</span></label>
 <label class="check"><input id="jpeg" type="checkbox" checked><span>Re-encode opaque textures as JPEG (transparent textures remain PNG)</span></label>
 <div id="optInfo" class="status">Choose a VRM file to begin.</div>
@@ -64,7 +75,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:4px 18px 24px
 </section>
 <section class="card"><h2>Compatibility & limitations</h2>
 <p class="note">• VRM 0.x files only. This tool does not convert GLB, PMX, or FBX to VRM.</p>
-<p class="note">• This build optimizes embedded textures and estimates mesh data. Polygon simplification and mesh compression are not implemented yet.</p>
+<p class="note">• Mesh Optimizer reduces triangle indices on supported triangle primitives. It keeps original vertex buffers intact, so skin weights, skeleton attributes and BlendShape data remain bound to their original vertices. Unsupported primitives are skipped.</p>
 <p class="note">• Transparent textures are kept in PNG format. Opaque textures may be converted to JPEG, which can introduce slight visual differences.</p>
 <p class="note">• A 100 MB model is not guaranteed to become 50 MB. Results depend on how much of the file size comes from textures.</p>
 <p class="note">• Keep your original VRM as a backup and test the exported file in your target app.</p></section>
@@ -167,7 +178,71 @@ async function optimizeModel(base){
  const json=JSON.parse(JSON.stringify(base.json)),chunks=base.chunks.map(c=>({type:c.type,data:c.data.slice(0)}));
  if(!json.extensions?.VRM)throw Error("Only VRM 0.x files are supported.");
  if(!Array.isArray(json.buffers)||json.buffers.length!==1||!Array.isArray(json.bufferViews))throw Error("Unsupported VRM buffer layout.");
- const binChunk=getBin(chunks),bin=new Uint8Array(binChunk.data),views=json.bufferViews;
+ const binChunk=getBin(chunks);let bin=new Uint8Array(binChunk.data);const views=json.bufferViews;
+
+ let meshStats={seen:0,changed:0,before:0,after:0,skipped:0};
+ const extraIndexParts=[];
+ if($("meshOptimize").checked){
+  $("meshInfo").className="status";$("meshInfo").textContent="Loading mesh simplifier…";
+  const mod=await import("https://cdn.jsdelivr.net/npm/meshoptimizer@1.1.1/meshopt_simplifier.module.js");
+  const simplifier=mod.MeshoptSimplifier;
+  if(!simplifier)throw Error("Mesh simplifier module is unavailable.");
+  await simplifier.ready;
+  const ratio=Number($("meshRatio").value),error=Number($("meshError").value);
+  const readPositions=(accessor)=>{
+   if(accessor.componentType!==5126||accessor.type!=="VEC3"||!Number.isInteger(accessor.bufferView)||accessor.sparse)throw Error("Unsupported POSITION accessor.");
+   const view=views[accessor.bufferView];if(!view)throw Error("POSITION bufferView missing.");
+   const stride=view.byteStride||12;if(stride<12)throw Error("Invalid POSITION stride.");
+   const start=(view.byteOffset||0)+(accessor.byteOffset||0);
+   if(start+(accessor.count?((accessor.count-1)*stride+12):0)>bin.length)throw Error("POSITION data exceeds binary buffer.");
+   const dv=new DataView(bin.buffer,bin.byteOffset,bin.byteLength),out=new Float32Array(accessor.count*3);
+   for(let v=0;v<accessor.count;v++)for(let c=0;c<3;c++)out[v*3+c]=dv.getFloat32(start+v*stride+c*4,true);
+   return out;
+  };
+  const readIndices=(primitive,vertexCount)=>{
+   if(!Number.isInteger(primitive.indices)){const a=new Uint32Array(vertexCount);for(let i=0;i<vertexCount;i++)a[i]=i;return {values:a,source:null};}
+   const source=json.accessors[primitive.indices];if(!source||source.type!=="SCALAR"||![5121,5123,5125].includes(source.componentType)||!Number.isInteger(source.bufferView)||source.sparse)throw Error("Unsupported index accessor.");
+   const view=views[source.bufferView],start=(view?.byteOffset||0)+(source.byteOffset||0),count=source.count;
+   if(!view||start+count*(source.componentType===5121?1:source.componentType===5123?2:4)>bin.length)throw Error("Index data exceeds binary buffer.");
+   const dv=new DataView(bin.buffer,bin.byteOffset,bin.byteLength),a=new Uint32Array(count);
+   for(let i=0;i<count;i++)a[i]=source.componentType===5121?dv.getUint8(start+i):source.componentType===5123?dv.getUint16(start+i*2,true):dv.getUint32(start+i*4,true);
+   return {values:a,source};
+  };
+  for(const mesh of (json.meshes||[]))for(const primitive of (mesh.primitives||[])){
+   if((primitive.mode??4)!==4||!primitive.attributes||!Number.isInteger(primitive.attributes.POSITION)){meshStats.skipped++;continue;}
+   try{
+    const posAcc=json.accessors[primitive.attributes.POSITION],positions=readPositions(posAcc),idx=readIndices(primitive,posAcc.count),indices=idx.values;
+    if(indices.length<12||indices.length%3!==0){meshStats.skipped++;continue;}
+    meshStats.seen++;meshStats.before+=indices.length/3;
+    const target=Math.max(3,Math.floor(indices.length*ratio/3)*3);
+    const [reduced,actualError]=simplifier.simplify(indices,positions,3,target,error);
+    if(reduced.length>=indices.length||reduced.length<3){meshStats.after+=indices.length/3;continue;}
+    const maxIndex=reduced.reduce((m,v)=>Math.max(m,v),0),componentType=maxIndex<=65535?5123:5125;
+    const packedIndices=componentType===5123?Uint16Array.from(reduced):reduced;
+    const bytes=new Uint8Array(packedIndices.buffer.slice(packedIndices.byteOffset,packedIndices.byteOffset+packedIndices.byteLength));
+    extraIndexParts.push(bytes);
+    const viewIndex=views.length;views.push({buffer:0,byteOffset:0,byteLength:bytes.length,target:34963});
+    const newAccessor={...(idx.source||{}),bufferView:viewIndex,byteOffset:0,componentType,count:reduced.length,type:"SCALAR",min:[Math.min(...reduced)],max:[maxIndex]};
+    delete newAccessor.sparse;delete newAccessor.normalized;
+    const accessorIndex=json.accessors.length;json.accessors.push(newAccessor);primitive.indices=accessorIndex;
+    meshStats.changed++;meshStats.after+=reduced.length/3;
+   }catch(e){meshStats.skipped++;}
+  }
+  if(extraIndexParts.length){
+   const extraSize=extraIndexParts.reduce((n,b)=>n+align4(b.length),0),extended=new Uint8Array(bin.length+extraSize);extended.set(bin);
+   let cursor=bin.length;
+   let partIndex=0;
+   for(let vi=views.length-extraIndexParts.length;vi<views.length;vi++){
+    cursor=align4(cursor);const bytes=extraIndexParts[partIndex++];extended.set(bytes,cursor);views[vi].byteOffset=cursor;cursor+=bytes.length;
+   }
+   bin=extended;
+  }
+  $("meshInfo").className=meshStats.changed?"status ok":"status warn";
+  $("meshInfo").textContent=meshStats.changed
+   ?"Mesh pass complete: "+meshStats.before.toLocaleString()+" → "+meshStats.after.toLocaleString()+" triangles across "+meshStats.changed+" primitives. "+meshStats.skipped+" skipped. Geometric error is limited to the selected threshold."
+   :"No supported primitives could be reduced. "+meshStats.skipped+" primitives skipped.";
+ }else{$("meshInfo").textContent="Mesh optimization is off; original polygon data is preserved.";}
+
  const imageViews=new Map();
  let totalImages=0,processed=0,originalTextureBytes=0,newTextureBytes=0;
  const preset={balanced:{max:2048,q:.82},strong:{max:1024,q:.76},maximum:{max:512,q:.68},extreme:{max:256,q:.60}}[$("preset").value];
@@ -202,7 +277,7 @@ async function optimizeModel(base){
  binChunk.data=packed.buffer;
  setProgress(92);
  const blob=makeGlb(json,chunks);
- return {blob,json,chunks,totalImages,processed,originalTextureBytes,newTextureBytes};
+ return {blob,json,chunks,totalImages,processed,originalTextureBytes,newTextureBytes,meshStats};
 }
 function saveBlob(blob,name){
  const a=document.createElement("a"),url=URL.createObjectURL(blob);a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);
@@ -237,7 +312,7 @@ $("optimize").addEventListener("click",async()=>{
   $("newSize").textContent=fmt(after);$("saved").textContent=(delta>=0?fmt(delta)+" saved":fmt(-delta)+" larger");
   $("imagesDone").textContent=result.processed+" / "+result.totalImages;$("resultStats").classList.remove("hidden");
   $("optInfo").className=delta>0?"status ok":"status warn";
-  $("optInfo").textContent=delta>0?"Optimization complete. File reduced by "+pct.toFixed(1)+"%.":"Optimization complete, but this profile did not reduce the file size. Try a stronger profile.";
+  $("optInfo").textContent=(delta>0?"Optimization complete. File reduced by "+pct.toFixed(1)+"%. ":"Optimization complete, but this profile did not reduce the file size. ")+(result.meshStats.changed?"Mesh triangles: "+result.meshStats.before.toLocaleString()+" → "+result.meshStats.after.toLocaleString()+".":"No mesh primitives were reduced.");
   $("download").disabled=false;$("build").disabled=false;setProgress(100);
  }catch(err){$("optInfo").className="status bad";$("optInfo").textContent="Optimization failed: "+err.message;setProgress(0);}
  finally{$("optimize").disabled=false;}
