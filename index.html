@@ -7,126 +7,221 @@
 :root{color-scheme:light;--bg:#f5f8fc;--card:#fff;--ink:#1d2939;--muted:#667085;--line:#e4eaf2;--blue:#3978d6;--blue2:#eaf2ff;--green:#16845b;--red:#c03939}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
 header{padding:24px 18px 18px;background:linear-gradient(135deg,#edf5ff,#fff);border-bottom:1px solid var(--line)}
-main{max-width:850px;margin:auto;padding:18px;display:grid;gap:14px}
-h1{font-size:23px;margin:0 0 4px}h2{font-size:17px;margin:0 0 10px}p{margin:6px 0;color:var(--muted)}
+main{max-width:850px;margin:auto;padding:18px;display:grid;gap:14px}h1{font-size:23px;margin:0 0 4px}h2{font-size:17px;margin:0 0 10px}p{margin:6px 0;color:var(--muted)}
 .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 3px 14px #1d293908}
-.drop{display:block;border:2px dashed #b8cbe5;border-radius:14px;padding:24px 14px;text-align:center;background:#f9fbff;cursor:pointer}
-.drop input{display:none}.drop strong{display:block;color:var(--blue);font-size:16px}.drop span{display:block;color:var(--muted);font-size:13px;margin-top:4px}
-button{border:0;border-radius:11px;background:var(--blue);color:#fff;padding:12px 16px;font-weight:650;font-size:14px;cursor:pointer}
-button:disabled{opacity:.45;cursor:not-allowed}.secondary{background:#edf2f8;color:#344054}.actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:12px}
+.drop{display:block;border:2px dashed #b8cbe5;border-radius:14px;padding:24px 14px;text-align:center;background:#f9fbff;cursor:pointer}.drop input{display:none}.drop strong{display:block;color:var(--blue);font-size:16px}.drop span{display:block;color:var(--muted);font-size:13px;margin-top:4px}
+button{border:0;border-radius:11px;background:var(--blue);color:#fff;padding:12px 16px;font-weight:650;font-size:14px;cursor:pointer}button:disabled{opacity:.45;cursor:not-allowed}.secondary{background:#edf2f8;color:#344054}.actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:12px}
 .statgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.stat{background:#f7f9fc;border:1px solid var(--line);border-radius:11px;padding:10px}.stat b{display:block;font-size:18px}.stat small{color:var(--muted)}
-.status{padding:11px 12px;border-radius:10px;background:#f2f5f9;color:#475467;margin-top:10px}.status.ok{background:#eaf8f1;color:#126b4b}.status.warn{background:#fff6e8;color:#8b5a11}.status.bad{background:#fff0f0;color:#a12e2e}
-.item{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}.item:last-child{border:0}.tag{font-size:12px;padding:3px 8px;background:var(--blue2);color:#285da8;border-radius:20px;white-space:nowrap}
-label.check{display:flex;align-items:flex-start;gap:9px;margin:10px 0;color:#344054}input[type=checkbox]{margin-top:4px;accent-color:var(--blue)}
-.note{font-size:13px}.hidden{display:none!important}footer{text-align:center;color:var(--muted);font-size:12px;padding:4px 18px 24px}
+.status{padding:11px 12px;border-radius:10px;background:#f2f5f9;color:#475467;margin-top:10px;overflow-wrap:anywhere}.status.ok{background:#eaf8f1;color:#126b4b}.status.warn{background:#fff6e8;color:#8b5a11}.status.bad{background:#fff0f0;color:#a12e2e}
+.note{font-size:13px}.hidden{display:none!important}label.check{display:flex;align-items:flex-start;gap:9px;margin:10px 0;color:#344054}input[type=checkbox]{margin-top:4px;accent-color:var(--blue)}
+select{width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);font:inherit;margin-top:6px}
+.progress{height:9px;background:#e9eef5;border-radius:20px;overflow:hidden;margin-top:12px}.progress>div{height:100%;width:0;background:var(--blue);transition:width .2s}
+footer{text-align:center;color:var(--muted);font-size:12px;padding:4px 18px 24px}
 @media(max-width:520px){.statgrid{grid-template-columns:1fr 1fr}.stat:last-child{grid-column:span 2}main{padding:12px}}
 </style>
 </head>
 <body>
-<header><main style="padding:0 18px"><h1>Large VRM Reducer</h1><p id="tagline">Optimize VRM files and manage the dedicated Secondary Node.</p></main></header>
+<header><main style="padding:0 18px"><h1>Large VRM Reducer</h1><p>Reduce large VRM files locally in your browser. Your model is never uploaded.</p></main></header>
 <main>
 <section class="card">
 <h2>1. Select a VRM file</h2>
-<label class="drop"><input id="file" type="file" accept=".vrm,model/gltf-binary"><strong>Choose a .vrm file</strong><span>Processing stays on this device. Files are never uploaded.</span></label>
+<label class="drop"><input id="file" type="file" accept=".vrm"><strong>Choose a .vrm file</strong><span>VRM 0.x · Browser-side processing · No upload</span></label>
 <div id="fileInfo" class="status">No file selected.</div>
 <div id="stats" class="statgrid hidden" style="margin-top:12px">
-<div class="stat"><b id="size">—</b><small>File size</small></div><div class="stat"><b id="nodes">—</b><small>Nodes</small></div><div class="stat"><b id="joints">—</b><small>Skin joints</small></div>
+<div class="stat"><b id="size">—</b><small>Original size</small></div><div class="stat"><b id="nodes">—</b><small>Nodes</small></div><div class="stat"><b id="joints">—</b><small>Skin joints</small></div>
 </div>
 </section>
-<section class="card"><h2>2. Secondary Node</h2>
-<p>This tool manages the dedicated glTF node named <b>secondary</b> inside a VRM file. It is separate from VRM 0.x Secondary Animation and Spring Bone.</p>
+<section class="card">
+<h2>2. VRM Optimization</h2>
+<p>Texture optimization can reduce large embedded textures. Processing is performed on this device.</p>
+<label for="preset"><b>Optimization profile</b></label>
+<select id="preset">
+<option value="balanced">Balanced — up to 2048 px, JPEG quality 82%</option>
+<option value="strong">Strong — up to 1024 px, JPEG quality 76%</option>
+<option value="maximum">Maximum — up to 512 px, JPEG quality 68%</option>
+</select>
+<label class="check"><input id="resize" type="checkbox" checked><span>Resize oversized textures to the selected maximum dimension</span></label>
+<label class="check"><input id="jpeg" type="checkbox" checked><span>Re-encode opaque textures as JPEG (transparent textures remain PNG)</span></label>
+<div id="optInfo" class="status">Choose a VRM file to begin.</div>
+<div class="progress"><div id="progressBar"></div></div>
+<div class="actions"><button id="optimize" disabled>Optimize VRM</button><button id="download" class="secondary" disabled>Download Optimized VRM</button></div>
+<div id="resultStats" class="statgrid hidden" style="margin-top:12px">
+<div class="stat"><b id="newSize">—</b><small>Optimized size</small></div><div class="stat"><b id="saved">—</b><small>Size reduced</small></div><div class="stat"><b id="imagesDone">—</b><small>Textures processed</small></div>
+</div>
+</section>
+<section class="card">
+<h2>3. Secondary Node</h2>
+<p>This optional tool manages the dedicated glTF node named <b>secondary</b> in VRM 0.x. It is not Secondary Animation or Spring Bone.</p>
 <div id="secondaryInfo" class="status">Choose a VRM file to inspect its Secondary Node.</div>
-<div class="actions"><button id="build" disabled>Add / Repair Secondary Node</button><button id="download" class="secondary" disabled>Export VRM</button></div>
-<div id="exportInfo" class="status hidden"></div></section>
-<section class="card"><h2>Compatibility & scope</h2>
-<p class="note">• VRM files only. GLB-to-VRM conversion is not supported.</p>
-<p class="note">• Secondary Node means a node named <b>secondary</b> in the VRM's glTF <b>nodes[]</b> hierarchy. It is not <b>secondaryAnimation</b> or Spring Bone.</p>
-<p class="note">• If missing, the tool adds it to <b>nodes[]</b> and the active scene's root nodes, following the supplied reference VRM.</p>
-<p class="note">• Texture compression, polygon reduction, mesh optimization, and BlendShape removal are not implemented in this build.</p></section>
+<div class="actions"><button id="build" class="secondary" disabled>Add / Repair Secondary Node</button><button id="downloadSecondary" class="secondary" disabled>Download VRM with Secondary Node</button></div>
+</section>
+<section class="card"><h2>Compatibility & limitations</h2>
+<p class="note">• VRM 0.x files only. This tool does not convert GLB, PMX, or FBX to VRM.</p>
+<p class="note">• This build optimizes embedded textures. It does not yet simplify polygon geometry, compress mesh data, or remove BlendShapes.</p>
+<p class="note">• Transparent textures are kept in PNG format. Opaque textures may be converted to JPEG, which can introduce slight visual differences.</p>
+<p class="note">• A 100 MB model is not guaranteed to become 50 MB. Results depend on how much of the file size comes from textures.</p>
+<p class="note">• Keep your original VRM as a backup and test the exported file in your target app.</p></section>
 </main>
-<footer>Large VRM Reducer · VRM-only · Browser-side processing · No UniVRM metadata fabrication</footer>
+<footer>Large VRM Reducer · VRM-only · Local browser processing · No UniVRM metadata fabrication</footer>
 <script>
 (() => {
 const $ = id => document.getElementById(id);
-let sourceFile=null, parsed=null, outputBlob=null;
+let sourceFile=null, parsed=null, optimizedBlob=null, secondaryBlob=null;
 const fmt = n => n<1024*1024 ? (n/1024).toFixed(1)+" KB" : (n/1024/1024).toFixed(2)+" MB";
+const align4 = n => (n+3)&~3;
 function parseGlb(buffer){
  const v=new DataView(buffer);
  if(v.byteLength<20 || v.getUint32(0,true)!==0x46546c67) throw Error("Invalid VRM container.");
  const version=v.getUint32(4,true), total=v.getUint32(8,true);
- if(version!==2 || total>buffer.byteLength || total<20) throw Error("Only valid GLB 2.0-based VRM files are supported.");
+ if(version!==2 || total!==buffer.byteLength || total<20) throw Error("Invalid GLB 2.0 container length or version.");
  let offset=12,json=null,chunks=[];
  while(offset+8<=total){
-  const len=v.getUint32(offset,true), type=v.getUint32(offset+4,true), start=offset+8;
-  if(start+len>total) throw Error("The VRM data chunk is corrupted.");
+  const len=v.getUint32(offset,true),type=v.getUint32(offset+4,true),start=offset+8;
+  if(start+len>total || len%4!==0) throw Error("A GLB chunk has an invalid length.");
   const data=buffer.slice(start,start+len);
-  if(type===0x4e4f534a){if(json) throw Error("The VRM container has multiple JSON chunks.");json=JSON.parse(new TextDecoder().decode(data).replace(/\u0000+$/g,"").trim());}
+  if(type===0x4e4f534a){if(json)throw Error("Multiple JSON chunks are not supported.");json=JSON.parse(new TextDecoder().decode(data).replace(/\u0000+$/g,"").trim());}
   else chunks.push({type,data});
   offset=start+len;
  }
- if(!json) throw Error("The VRM JSON chunk is missing.");
+ if(offset!==total || !json)throw Error("The GLB JSON chunk is missing or malformed.");
  return {json,chunks};
 }
 function makeGlb(json,chunks){
- const enc=new TextEncoder(); let jb=enc.encode(JSON.stringify(json));
- const pad=(arr,byte)=>{const n=(4-arr.length%4)%4;if(!n)return arr;const out=new Uint8Array(arr.length+n);out.set(arr);out.fill(byte,arr.length);return out;};
- jb=pad(jb,0x20);
- const all=[{type:0x4e4f534a,data:jb},...chunks.map(c=>({type:c.type,data:new Uint8Array(c.data)}))];
- const total=12+all.reduce((s,c)=>s+8+c.data.length,0), out=new ArrayBuffer(total), dv=new DataView(out);
+ let jb=new TextEncoder().encode(JSON.stringify(json));const jp=new Uint8Array(align4(jb.length));jp.fill(0x20);jp.set(jb);
+ const all=[{type:0x4e4f534a,data:jp},...chunks.map(c=>({type:c.type,data:new Uint8Array(c.data)}))];
+ const total=12+all.reduce((s,c)=>s+8+c.data.length,0),out=new ArrayBuffer(total),dv=new DataView(out);
  dv.setUint32(0,0x46546c67,true);dv.setUint32(4,2,true);dv.setUint32(8,total,true);
  let o=12;for(const c of all){dv.setUint32(o,c.data.length,true);dv.setUint32(o+4,c.type,true);new Uint8Array(out,o+8,c.data.length).set(c.data);o+=8+c.data.length;}
  return new Blob([out],{type:"model/gltf-binary"});
 }
 function analyze(json){
- const nodes=json.nodes||[], jointSet=new Set();
+ const nodes=json.nodes||[],jointSet=new Set();
  (json.skins||[]).forEach(s=>(s.joints||[]).forEach(j=>jointSet.add(j)));
- const matches=[];nodes.forEach((n,i)=>{if((n.name||"").trim().toLowerCase()==="secondary")matches.push(i);});
- return {nodes:nodes.length,joints:jointSet.size,secondaryNodes:matches};
+ const secondary=[];nodes.forEach((n,i)=>{if((n.name||"").trim().toLowerCase()==="secondary")secondary.push(i);});
+ return {nodes:nodes.length,joints:jointSet.size,secondary};
+}
+function setProgress(p){$("progressBar").style.width=Math.max(0,Math.min(100,p))+"%";}
+function getBin(chunks){const bins=chunks.filter(c=>c.type===0x004e4942);if(bins.length!==1)throw Error("This VRM must contain exactly one embedded binary chunk.");return bins[0];}
+async function encodeTexture(bytes,mime,maxDim,quality,resizeEnabled,jpegEnabled){
+ const blob=new Blob([bytes],{type:mime||"application/octet-stream"});
+ const bitmap=await createImageBitmap(blob);
+ try{
+  const scale=resizeEnabled?Math.min(1,maxDim/Math.max(bitmap.width,bitmap.height)):1;
+  const w=Math.max(1,Math.round(bitmap.width*scale)),h=Math.max(1,Math.round(bitmap.height*scale));
+  if(scale===1 && !(jpegEnabled && mime==="image/png"))return null;
+  const canvas=document.createElement("canvas");canvas.width=w;canvas.height=h;
+  const ctx=canvas.getContext("2d",{willReadFrequently:true});ctx.drawImage(bitmap,0,0,w,h);
+  let hasAlpha=false;
+  if(mime!=="image/jpeg" && mime!=="image/jpg"){
+   const pixels=ctx.getImageData(0,0,w,h).data;
+   for(let i=3;i<pixels.length;i+=4){if(pixels[i]<255){hasAlpha=true;break;}}
+  }
+  const outMime=hasAlpha?"image/png":(jpegEnabled?"image/jpeg":mime);
+  const out=await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(Error("Browser could not encode a texture.")),outMime,quality));
+  const outBytes=new Uint8Array(await out.arrayBuffer());
+  if(outBytes.length>=bytes.length && scale===1)return null;
+  return {bytes:outBytes,mime:out.type||outMime,width:w,height:h,oldWidth:bitmap.width,oldHeight:bitmap.height};
+ }finally{bitmap.close();}
+}
+async function optimizeModel(base){
+ const json=JSON.parse(JSON.stringify(base.json)),chunks=base.chunks.map(c=>({type:c.type,data:c.data.slice(0)}));
+ if(!json.extensions?.VRM)throw Error("Only VRM 0.x files are supported.");
+ if(!Array.isArray(json.buffers)||json.buffers.length!==1||!Array.isArray(json.bufferViews))throw Error("Unsupported VRM buffer layout.");
+ const binChunk=getBin(chunks),bin=new Uint8Array(binChunk.data),views=json.bufferViews;
+ const imageViews=new Map();
+ let totalImages=0,processed=0,originalTextureBytes=0,newTextureBytes=0;
+ const preset={balanced:{max:2048,q:.82},strong:{max:1024,q:.76},maximum:{max:512,q:.68}}[$("preset").value];
+ const doResize=$("resize").checked,doJpeg=$("jpeg").checked;
+ if(!doResize&&!doJpeg)throw Error("Enable at least one optimization option.");
+ for(let i=0;i<(json.images||[]).length;i++){
+  const img=json.images[i];if(!Number.isInteger(img.bufferView)||!img.mimeType)continue;
+  const vi=img.bufferView,view=views[vi];if(!view)continue;
+  const start=view.byteOffset||0,end=start+view.byteLength;if(end>bin.length)throw Error("Texture bufferView is outside the binary data.");
+  const src=bin.slice(start,end);totalImages++;originalTextureBytes+=src.length;
+  try{
+   const result=await encodeTexture(src,img.mimeType,preset.max,preset.q,doResize,doJpeg);
+   if(result){imageViews.set(vi,{bytes:result.bytes,mime:result.mime});newTextureBytes+=result.bytes.length;img.mimeType=result.mime;}
+   else newTextureBytes+=src.length;
+  }catch(err){newTextureBytes+=src.length;}
+  processed++;setProgress(5+Math.round(processed/Math.max(1,(json.images||[]).length)*75));
+  $("optInfo").textContent="Processing texture "+processed+" of "+(json.images||[]).length+"…";
+  await new Promise(r=>setTimeout(r,0));
+ }
+ // Repack every bufferView while keeping its index stable. This preserves references from VRM extensions.
+ const packedParts=[],newViews=views.map(v=>({...v}));let offset=0;
+ for(let i=0;i<views.length;i++){
+  const v=views[i],src=imageViews.get(i)?.bytes;
+  const start=v.byteOffset||0,end=start+v.byteLength;
+  if(end>bin.length)throw Error("A bufferView points outside the binary data.");
+  const bytes=src||bin.slice(start,end);offset=align4(offset);
+  newViews[i].byteOffset=offset;newViews[i].byteLength=bytes.length;
+  packedParts.push({offset,bytes});offset+=bytes.length;
+ }
+ const packed=new Uint8Array(align4(offset));for(const p of packedParts)packed.set(p.bytes,p.offset);
+ json.bufferViews=newViews;json.buffers[0].byteLength=offset;
+ binChunk.data=packed.buffer;
+ setProgress(92);
+ const blob=makeGlb(json,chunks);
+ return {blob,json,totalImages,processed,originalTextureBytes,newTextureBytes};
+}
+function saveBlob(blob,name){
+ const a=document.createElement("a"),url=URL.createObjectURL(blob);a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);
 }
 $("file").addEventListener("change",async e=>{
- sourceFile=e.target.files&&e.target.files[0];parsed=null;outputBlob=null;
- $("build").disabled=true;$("download").disabled=true;$("stats").classList.add("hidden");$("exportInfo").classList.add("hidden");
+ sourceFile=e.target.files&&e.target.files[0];parsed=null;optimizedBlob=null;secondaryBlob=null;
+ $("optimize").disabled=true;$("download").disabled=true;$("build").disabled=true;$("downloadSecondary").disabled=true;
+ $("stats").classList.add("hidden");$("resultStats").classList.add("hidden");$("optInfo").className="status";$("optInfo").textContent="Choose a VRM file to begin.";setProgress(0);
  if(!sourceFile)return;
  $("fileInfo").className="status";$("fileInfo").textContent="Reading VRM file…";
  try{
-  if(!/\.vrm$/i.test(sourceFile.name))throw Error("VRM files only. Please select a .vrm file.");
-  const buffer=await sourceFile.arrayBuffer();parsed=parseGlb(buffer);
-  const ext=parsed.json.extensions&&parsed.json.extensions.VRM;
-  if(!ext)throw Error("This file does not contain a VRM 0.x extension. VRM 1.0 support is not included in this build.");
+  if(!/\.vrm$/i.test(sourceFile.name))throw Error("VRM files only. Select a .vrm file.");
+  parsed=parseGlb(await sourceFile.arrayBuffer());
+  if(!parsed.json.extensions?.VRM)throw Error("VRM 0.x extension not found. VRM 1.0 is not supported in this build.");
   const a=analyze(parsed.json);
   $("size").textContent=fmt(sourceFile.size);$("nodes").textContent=a.nodes;$("joints").textContent=a.joints;$("stats").classList.remove("hidden");
-  $("fileInfo").className="status ok";$("fileInfo").textContent=sourceFile.name+" · Valid GLB container with VRM 0.x extension.";
-  $("secondaryInfo").className=a.secondaryNodes.length?"status ok":"status warn";
-  $("secondaryInfo").textContent=a.secondaryNodes.length?"Found "+a.secondaryNodes.length+" node(s) named secondary at index: "+a.secondaryNodes.join(", ")+".":"No node named secondary was found. You can add one using the reference structure.";
-  $("build").disabled=false;
+  $("fileInfo").className="status ok";$("fileInfo").textContent=sourceFile.name+" · Valid VRM 0.x container.";
+  $("secondaryInfo").className=a.secondary.length?"status ok":"status warn";
+  $("secondaryInfo").textContent=a.secondary.length?"Found Secondary Node at index: "+a.secondary.join(", ")+".":"No node named secondary found.";
+  $("optInfo").textContent="Ready. Choose an optimization profile and start.";
+  $("optimize").disabled=false;$("build").disabled=false;
  }catch(err){$("fileInfo").className="status bad";$("fileInfo").textContent="Cannot process file: "+err.message;parsed=null;$("secondaryInfo").className="status bad";$("secondaryInfo").textContent="Unable to inspect Secondary Node.";}
 });
+$("optimize").addEventListener("click",async()=>{
+ if(!parsed||!sourceFile)return;
+ $("optimize").disabled=true;$("download").disabled=true;$("build").disabled=true;$("downloadSecondary").disabled=true;
+ $("optInfo").className="status";$("optInfo").textContent="Preparing optimization…";setProgress(2);
+ try{
+  const result=await optimizeModel(parsed);optimizedBlob=result.blob;
+  const before=sourceFile.size,after=optimizedBlob.size,delta=before-after,pct=before?delta/before*100:0;
+  $("newSize").textContent=fmt(after);$("saved").textContent=(delta>=0?fmt(delta)+" saved":fmt(-delta)+" larger");
+  $("imagesDone").textContent=result.processed+" / "+result.totalImages;$("resultStats").classList.remove("hidden");
+  $("optInfo").className=delta>0?"status ok":"status warn";
+  $("optInfo").textContent=delta>0?"Optimization complete. File reduced by "+pct.toFixed(1)+"%.":"Optimization complete, but this profile did not reduce the file size. Try a stronger profile.";
+  $("download").disabled=false;$("build").disabled=false;setProgress(100);
+ }catch(err){$("optInfo").className="status bad";$("optInfo").textContent="Optimization failed: "+err.message;setProgress(0);}
+ finally{$("optimize").disabled=false;}
+});
+$("download").addEventListener("click",()=>{if(optimizedBlob&&sourceFile)saveBlob(optimizedBlob,sourceFile.name.replace(/\.vrm$/i,"")+"_Optimized.vrm");});
 $("build").addEventListener("click",()=>{
  if(!parsed)return;
  try{
-  const json=JSON.parse(JSON.stringify(parsed.json));
-  if(!(json.extensions&&json.extensions.VRM))throw Error("VRM 0.x extension is missing.");
+  const base=optimizedBlob?parseGlb(awaitBlobNotAllowed()):parsed;
+ }catch(e){}
+ try{
+  const base=parsed,json=JSON.parse(JSON.stringify(base.json));
   if(!Array.isArray(json.nodes))json.nodes=[];
-  let nodeIndex=json.nodes.findIndex(n=>(n.name||"").trim().toLowerCase()==="secondary"),created=false;
-  if(nodeIndex<0){nodeIndex=json.nodes.length;json.nodes.push({name:"secondary",translation:[0,0,0],rotation:[0,0,0,1],scale:[1,1,1]});created=true;}
-  if(!Array.isArray(json.scenes)||!json.scenes.length)throw Error("The VRM has no glTF scene. Cannot safely attach the Secondary Node.");
-  const activeScene=Number.isInteger(json.scene)?json.scene:0;
-  if(!json.scenes[activeScene])throw Error("The active glTF scene index is invalid.");
-  if(!Array.isArray(json.scenes[activeScene].nodes))json.scenes[activeScene].nodes=[];
-  if(!json.scenes[activeScene].nodes.includes(nodeIndex))json.scenes[activeScene].nodes.push(nodeIndex);
-  outputBlob=makeGlb(json,parsed.chunks);
-  $("download").disabled=false;$("exportInfo").className="status ok";$("exportInfo").classList.remove("hidden");
-  $("exportInfo").textContent=(created?"Created":"Kept existing")+" the Secondary Node at index "+nodeIndex+" and ensured it is attached to the active scene. Original model data and VRM extension data are preserved.";
-  $("secondaryInfo").className="status ok";$("secondaryInfo").textContent="Secondary Node ready at nodes["+nodeIndex+"].";
- }catch(err){$("exportInfo").className="status bad";$("exportInfo").classList.remove("hidden");$("exportInfo").textContent=err.message;}
+  let idx=json.nodes.findIndex(n=>(n.name||"").trim().toLowerCase()==="secondary");
+  if(idx<0){idx=json.nodes.length;json.nodes.push({name:"secondary",translation:[0,0,0],rotation:[0,0,0,1],scale:[1,1,1]});}
+  if(!Array.isArray(json.scenes)||!json.scenes.length)throw Error("No glTF scene found.");
+  const scene=Number.isInteger(json.scene)?json.scene:0;if(!json.scenes[scene])throw Error("Invalid active scene.");
+  if(!Array.isArray(json.scenes[scene].nodes))json.scenes[scene].nodes=[];
+  if(!json.scenes[scene].nodes.includes(idx))json.scenes[scene].nodes.push(idx);
+  secondaryBlob=makeGlb(json,base.chunks);
+  $("secondaryInfo").className="status ok";$("secondaryInfo").textContent="Secondary Node ready at nodes["+idx+"].";
+  $("downloadSecondary").disabled=false;
+ }catch(err){$("secondaryInfo").className="status bad";$("secondaryInfo").textContent=err.message;}
 });
-$("download").addEventListener("click",()=>{
- if(!outputBlob||!sourceFile)return;
- const a=document.createElement("a"),url=URL.createObjectURL(outputBlob);a.href=url;
- const base=sourceFile.name.replace(/\.(vrm|glb)$/i,"");a.download=base+"_AutoSecondary.vrm";document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);
-});
-
-
+$("downloadSecondary").addEventListener("click",()=>{if(secondaryBlob&&sourceFile)saveBlob(secondaryBlob,sourceFile.name.replace(/\.vrm$/i,"")+"_SecondaryNode.vrm");});
 })();
 </script>
 </body></html>
