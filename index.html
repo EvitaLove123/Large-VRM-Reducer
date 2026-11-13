@@ -66,7 +66,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:4px 18px 24px
 <script>
 (() => {
 const $ = id => document.getElementById(id);
-let sourceFile=null, parsed=null, optimizedBlob=null, secondaryBlob=null;
+let sourceFile=null, parsed=null, optimizedBlob=null, optimizedModel=null, secondaryBlob=null;
 const fmt = n => n<1024*1024 ? (n/1024).toFixed(1)+" KB" : (n/1024/1024).toFixed(2)+" MB";
 const align4 = n => (n+3)&~3;
 function parseGlb(buffer){
@@ -162,13 +162,13 @@ async function optimizeModel(base){
  binChunk.data=packed.buffer;
  setProgress(92);
  const blob=makeGlb(json,chunks);
- return {blob,json,totalImages,processed,originalTextureBytes,newTextureBytes};
+ return {blob,json,chunks,totalImages,processed,originalTextureBytes,newTextureBytes};
 }
 function saveBlob(blob,name){
  const a=document.createElement("a"),url=URL.createObjectURL(blob);a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);
 }
 $("file").addEventListener("change",async e=>{
- sourceFile=e.target.files&&e.target.files[0];parsed=null;optimizedBlob=null;secondaryBlob=null;
+ sourceFile=e.target.files&&e.target.files[0];parsed=null;optimizedBlob=null;optimizedModel=null;secondaryBlob=null;
  $("optimize").disabled=true;$("download").disabled=true;$("build").disabled=true;$("downloadSecondary").disabled=true;
  $("stats").classList.add("hidden");$("resultStats").classList.add("hidden");$("optInfo").className="status";$("optInfo").textContent="Choose a VRM file to begin.";setProgress(0);
  if(!sourceFile)return;
@@ -191,7 +191,7 @@ $("optimize").addEventListener("click",async()=>{
  $("optimize").disabled=true;$("download").disabled=true;$("build").disabled=true;$("downloadSecondary").disabled=true;
  $("optInfo").className="status";$("optInfo").textContent="Preparing optimization…";setProgress(2);
  try{
-  const result=await optimizeModel(parsed);optimizedBlob=result.blob;
+  const result=await optimizeModel(parsed);optimizedBlob=result.blob;optimizedModel={json:result.json,chunks:result.chunks};
   const before=sourceFile.size,after=optimizedBlob.size,delta=before-after,pct=before?delta/before*100:0;
   $("newSize").textContent=fmt(after);$("saved").textContent=(delta>=0?fmt(delta)+" saved":fmt(-delta)+" larger");
   $("imagesDone").textContent=result.processed+" / "+result.totalImages;$("resultStats").classList.remove("hidden");
@@ -205,10 +205,7 @@ $("download").addEventListener("click",()=>{if(optimizedBlob&&sourceFile)saveBlo
 $("build").addEventListener("click",()=>{
  if(!parsed)return;
  try{
-  const base=optimizedBlob?parseGlb(awaitBlobNotAllowed()):parsed;
- }catch(e){}
- try{
-  const base=parsed,json=JSON.parse(JSON.stringify(base.json));
+  const base=optimizedModel||parsed,json=JSON.parse(JSON.stringify(base.json));
   if(!Array.isArray(json.nodes))json.nodes=[];
   let idx=json.nodes.findIndex(n=>(n.name||"").trim().toLowerCase()==="secondary");
   if(idx<0){idx=json.nodes.length;json.nodes.push({name:"secondary",translation:[0,0,0],rotation:[0,0,0,1],scale:[1,1,1]});}
