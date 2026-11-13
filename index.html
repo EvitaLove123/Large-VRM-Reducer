@@ -31,14 +31,21 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:4px 18px 24px
 <div class="stat"><b id="size">—</b><small>Original size</small></div><div class="stat"><b id="nodes">—</b><small>Nodes</small></div><div class="stat"><b id="joints">—</b><small>Skin joints</small></div>
 </div>
 </section>
+<section class="card" id="analysisCard">
+<h2>2. File size analysis</h2>
+<p class="note">Estimate which embedded data is taking up space. This helps determine whether texture optimization alone can reach the 50 MB target.</p>
+<div class="statgrid"><div class="stat"><b id="textureBytes">—</b><small>Texture data</small></div><div class="stat"><b id="meshBytes">—</b><small>Mesh data</small></div><div class="stat"><b id="otherBytes">—</b><small>Other / rig data</small></div></div>
+<div id="targetInfo" class="status">Select a VRM to analyze its size distribution.</div>
+</section>
 <section class="card">
-<h2>2. VRM Optimization</h2>
+<h2>3. VRM Optimization</h2>
 <p>Texture optimization can reduce large embedded textures. Processing is performed on this device.</p>
 <label for="preset"><b>Optimization profile</b></label>
 <select id="preset">
 <option value="balanced">Balanced — up to 2048 px, JPEG quality 82%</option>
 <option value="strong">Strong — up to 1024 px, JPEG quality 76%</option>
 <option value="maximum">Maximum — up to 512 px, JPEG quality 68%</option>
+<option value="extreme">Extreme — up to 256 px, JPEG quality 60%</option>
 </select>
 <label class="check"><input id="resize" type="checkbox" checked><span>Resize oversized textures to the selected maximum dimension</span></label>
 <label class="check"><input id="jpeg" type="checkbox" checked><span>Re-encode opaque textures as JPEG (transparent textures remain PNG)</span></label>
@@ -50,14 +57,14 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:4px 18px 24px
 </div>
 </section>
 <section class="card">
-<h2>3. Secondary Node</h2>
+<h2>4. Secondary Node</h2>
 <p>This optional tool manages the dedicated glTF node named <b>secondary</b> in VRM 0.x. It is not Secondary Animation or Spring Bone.</p>
 <div id="secondaryInfo" class="status">Choose a VRM file to inspect its Secondary Node.</div>
 <div class="actions"><button id="build" class="secondary" disabled>Add / Repair Secondary Node</button><button id="downloadSecondary" class="secondary" disabled>Download VRM with Secondary Node</button></div>
 </section>
 <section class="card"><h2>Compatibility & limitations</h2>
 <p class="note">• VRM 0.x files only. This tool does not convert GLB, PMX, or FBX to VRM.</p>
-<p class="note">• This build optimizes embedded textures. It does not yet simplify polygon geometry, compress mesh data, or remove BlendShapes.</p>
+<p class="note">• This build optimizes embedded textures and estimates mesh data. Polygon simplification and mesh compression are not implemented yet.</p>
 <p class="note">• Transparent textures are kept in PNG format. Opaque textures may be converted to JPEG, which can introduce slight visual differences.</p>
 <p class="note">• A 100 MB model is not guaranteed to become 50 MB. Results depend on how much of the file size comes from textures.</p>
 <p class="note">• Keep your original VRM as a backup and test the exported file in your target app.</p></section>
@@ -100,6 +107,39 @@ function analyze(json){
  const secondary=[];nodes.forEach((n,i)=>{if((n.name||"").trim().toLowerCase()==="secondary")secondary.push(i);});
  return {nodes:nodes.length,joints:jointSet.size,secondary};
 }
+
+function analyzeSize(json,binLength){
+ const views=json.bufferViews||[],images=json.images||[],accessors=json.accessors||[];
+ const texture=new Set(),mesh=new Set(),rig=new Set();
+ for(const img of images)if(Number.isInteger(img.bufferView))texture.add(img.bufferView);
+ function addAccessor(set,index){
+  if(!Number.isInteger(index)||!accessors[index])return;
+  const a=accessors[index];if(Number.isInteger(a.bufferView))set.add(a.bufferView);
+  if(a.sparse){if(Number.isInteger(a.sparse.indices?.bufferView))set.add(a.sparse.indices.bufferView);if(Number.isInteger(a.sparse.values?.bufferView))set.add(a.sparse.values.bufferView);}
+ }
+ for(const m of (json.meshes||[]))for(const p of (m.primitives||[])){
+  for(const index of Object.values(p.attributes||{}))addAccessor(mesh,index);
+  addAccessor(mesh,p.indices);
+  for(const t of (p.targets||[]))for(const index of Object.values(t))addAccessor(mesh,index);
+ }
+ for(const s of (json.skins||[]))addAccessor(rig,s.inverseBindMatrices);
+ let t=0,m=0,r=0;
+ for(const i of texture)if(views[i])t+=views[i].byteLength||0;
+ for(const i of mesh)if(views[i]&&!texture.has(i))m+=views[i].byteLength||0;
+ for(const i of rig)if(views[i]&&!texture.has(i)&&!mesh.has(i))r+=views[i].byteLength||0;
+ const other=Math.max(0,binLength-t-m-r);
+ return {texture:t,mesh:m,other:other+r,total:binLength};
+}
+function showSizeAnalysis(json,binLength,fileSize){
+ const a=analyzeSize(json,binLength);
+ $("textureBytes").textContent=fmt(a.texture);$("meshBytes").textContent=fmt(a.mesh);$("otherBytes").textContent=fmt(a.other);
+ const lowerBound=Math.max(0,fileSize-a.texture);
+ $("targetInfo").className=lowerBound<=50*1024*1024?"status warn":"status warn";
+ let msg="Estimated non-texture size: "+fmt(lowerBound)+". ";
+ msg+=lowerBound<=50*1024*1024?"Texture optimization may be enough to approach 50 MB. ":"Texture optimization alone is unlikely to reach 50 MB; mesh and other data remain significant. ";
+ $("targetInfo").textContent=msg+"This is an estimate, not a guaranteed output size.";
+}
+
 function setProgress(p){$("progressBar").style.width=Math.max(0,Math.min(100,p))+"%";}
 function getBin(chunks){const bins=chunks.filter(c=>c.type===0x004e4942);if(bins.length!==1)throw Error("This VRM must contain exactly one embedded binary chunk.");return bins[0];}
 async function encodeTexture(bytes,mime,maxDim,quality,resizeEnabled,jpegEnabled){
@@ -130,7 +170,7 @@ async function optimizeModel(base){
  const binChunk=getBin(chunks),bin=new Uint8Array(binChunk.data),views=json.bufferViews;
  const imageViews=new Map();
  let totalImages=0,processed=0,originalTextureBytes=0,newTextureBytes=0;
- const preset={balanced:{max:2048,q:.82},strong:{max:1024,q:.76},maximum:{max:512,q:.68}}[$("preset").value];
+ const preset={balanced:{max:2048,q:.82},strong:{max:1024,q:.76},maximum:{max:512,q:.68},extreme:{max:256,q:.60}}[$("preset").value];
  const doResize=$("resize").checked,doJpeg=$("jpeg").checked;
  if(!doResize&&!doJpeg)throw Error("Enable at least one optimization option.");
  for(let i=0;i<(json.images||[]).length;i++){
@@ -178,6 +218,7 @@ $("file").addEventListener("change",async e=>{
   parsed=parseGlb(await sourceFile.arrayBuffer());
   if(!parsed.json.extensions?.VRM)throw Error("VRM 0.x extension not found. VRM 1.0 is not supported in this build.");
   const a=analyze(parsed.json);
+  showSizeAnalysis(parsed.json,getBin(parsed.chunks).data.byteLength,sourceFile.size);
   $("size").textContent=fmt(sourceFile.size);$("nodes").textContent=a.nodes;$("joints").textContent=a.joints;$("stats").classList.remove("hidden");
   $("fileInfo").className="status ok";$("fileInfo").textContent=sourceFile.name+" · Valid VRM 0.x container.";
   $("secondaryInfo").className=a.secondary.length?"status ok":"status warn";
